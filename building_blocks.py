@@ -1,98 +1,63 @@
 import tensorflow as tf
 
 
-def conv_block(x, model_width, kernel, strides=(1, 1), padding="same"):
-    x = tf.keras.layers.Conv2D(model_width, kernel, strides=strides, padding=padding, kernel_initializer="he_normal")(x)
+def classifier(x, dropout_rate=0, name='main', j=0):
+    x = tf.keras.layers.GlobalAveragePooling2D()(x)
+    x = tf.keras.layers.Flatten()(x)
+    x = tf.keras.layers.Dropout(dropout_rate)(x)
+    outputs = tf.keras.layers.Dense(1, activation='sigmoid', name=name + "_classifier_" + str(j))(x)
+    return outputs
+
+
+def conv_block(x, model_width, kernel, strides=(1, 1), padding="same", activation='relu', reverse=False):
+    if not reverse:
+        x = tf.keras.layers.Conv2D(model_width, kernel, strides=strides, padding=padding,
+                                   kernel_initializer="he_normal")(x)
     x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.Activation('relu')(x)
+    x = tf.keras.layers.Activation(activation)(x)
+    if reverse:
+        x = tf.keras.layers.Conv2D(model_width, kernel, strides=strides, padding=padding,
+                                   kernel_initializer="he_normal")(x)
     return x
 
 
-def inception_module_a(inputs, filter_multiplier, i):
-    branch1x1 = conv_block(inputs, 3 * filter_multiplier, (1, 1))
+def inception_module(inputs, filter_multiplier):
+    branch1x1 = conv_block(inputs, 4 * filter_multiplier, (1, 1), padding='valid')
 
-    branch5x5 = conv_block(inputs, 2 * filter_multiplier, (1, 1))
-    branch5x5 = conv_block(branch5x5, 3 * filter_multiplier, (5, 5))
+    branch3x3 = conv_block(inputs, 6 * filter_multiplier, (1, 1), padding='valid')
+    branch3x3 = conv_block(branch3x3, 8 * filter_multiplier, (3, 3))
 
-    branch3x3 = conv_block(inputs, 2 * filter_multiplier, (1, 1))
-    branch3x3 = conv_block(branch3x3, 3 * filter_multiplier, (3, 3))
-    branch3x3 = conv_block(branch3x3, 3 * filter_multiplier, (3, 3))
+    branch5x5 = conv_block(inputs, 1 * filter_multiplier, (1, 1), padding='valid')
+    branch5x5 = conv_block(branch5x5, 2 * filter_multiplier, (5, 5))
 
-    branch_pool = tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(1, 1), padding='same')(inputs)
-    branch_pool = conv_block(branch_pool, 3 * filter_multiplier, (1, 1))
+    branch_pool = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(1, 1), padding='same')(inputs)
+    branch_pool = conv_block(branch_pool, 2 * filter_multiplier, (1, 1))
 
-    out = tf.keras.layers.concatenate([branch1x1, branch5x5, branch3x3, branch_pool], axis=-1,
-                                      name='Inception_Module_A' + str(i))
+    out = tf.keras.layers.concatenate([branch1x1, branch3x3, branch5x5, branch_pool], axis=-1)
     return out
 
 
-def inception_module_b(inputs, filter_multiplier, i):
-    branch1x1 = conv_block(inputs, 12 * filter_multiplier, (1, 1))
+def residual_module(inputs, filter_multiplier, decrease_size=False, increase_depth=False):
+    if decrease_size or increase_depth:
+        shortcut = conv_block(inputs, 4 * filter_multiplier, (1, 1), strides=(2, 2) if decrease_size else (1, 1),
+                              padding='valid',
+                              activation='linear')
+    else:
+        shortcut = inputs
 
-    branch7x7 = conv_block(inputs, 6 * filter_multiplier, (1, 1))
-    branch7x7 = conv_block(branch7x7, 8 * filter_multiplier, (1, 7))
-    branch7x7 = conv_block(branch7x7, 8 * filter_multiplier, (7, 1))
+    x = conv_block(inputs, filter_multiplier, (3, 3))
+    x = conv_block(x, 4 * filter_multiplier, (1, 1), strides=(2, 2) if decrease_size else (1, 1), padding='valid',
+                   activation='linear')
 
-    branch7x7_2 = conv_block(inputs, 6 * filter_multiplier, 1)
-    branch7x7_2 = conv_block(branch7x7_2, 7 * filter_multiplier, (1, 7))
-    branch7x7_2 = conv_block(branch7x7_2, 7 * filter_multiplier, (7, 1))
-    branch7x7_2 = conv_block(branch7x7_2, 8 * filter_multiplier, (1, 7))
-    branch7x7_2 = conv_block(branch7x7_2, 8 * filter_multiplier, (7, 1))
+    x = tf.keras.layers.add([shortcut, x])
 
-    branch_pool = tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(1, 1), padding='same')(inputs)
-    branch_pool = conv_block(branch_pool, 4 * filter_multiplier, (1, 1))
-
-    out = tf.keras.layers.concatenate([branch1x1, branch7x7, branch7x7_2, branch_pool], axis=-1,
-                                      name='Inception_Module_B' + str(i))
+    out = tf.keras.layers.Activation('relu')(x)
     return out
 
 
-def inception_module_c(inputs, filter_multiplier, i):
-    branch1x1 = conv_block(inputs, 8 * filter_multiplier, (1, 1))
+def dense_module(inputs, filter_multiplier):
+    x = conv_block(inputs, filter_multiplier * 2, (1, 1), reverse=True)
+    x = conv_block(x, filter_multiplier // 2, (3, 3), reverse=True)
 
-    branch3x3 = conv_block(inputs, 12 * filter_multiplier, (1, 1))
-    branch3x3_a = conv_block(branch3x3, 16 * filter_multiplier, (1, 3))
-    branch3x3_b = conv_block(branch3x3, 16 * filter_multiplier, (3, 1))
-
-    branch3x3_2 = conv_block(inputs, 12 * filter_multiplier, (1, 1))
-    branch3x3_2 = conv_block(branch3x3_2, 16 * filter_multiplier, (1, 3))
-    branch3x3_2 = conv_block(branch3x3_2, 16 * filter_multiplier, (3, 1))
-    branch3x3_2a = conv_block(branch3x3_2, 16 * filter_multiplier, (1, 3))
-    branch3x3_2b = conv_block(branch3x3_2, 16 * filter_multiplier, (3, 1))
-
-    branch_pool = tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(1, 1), padding='same')(inputs)
-    branch_pool = conv_block(branch_pool, 8 * filter_multiplier, (1, 1))
-
-    out = tf.keras.layers.concatenate(
-        [branch1x1, branch3x3_a, branch3x3_b, branch3x3_2a, branch3x3_2b, branch_pool], axis=-1,
-        name='Inception_Module_C' + str(i))
-    return out
-
-
-def inception_reduction_module_a(inputs, filter_multiplier, i):
-    branch3x3 = conv_block(inputs, 2 * filter_multiplier, (1, 1))
-    branch3x3 = conv_block(branch3x3, 12 * filter_multiplier, (3, 3), strides=(2, 2))
-
-    branch3x3_2 = conv_block(inputs, 6 * filter_multiplier, (1, 1))
-    branch3x3_2 = conv_block(branch3x3_2, 7 * filter_multiplier, (3, 3))
-    branch3x3_2 = conv_block(branch3x3_2, 8 * filter_multiplier, (3, 3), strides=(2, 2))
-
-    branch_pool = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding='same')(inputs)
-    out = tf.keras.layers.concatenate([branch3x3, branch3x3_2, branch_pool], axis=-1,
-                                      name='Inception_Reduction_Module_A_' + str(i))
-    return out
-
-
-def inception_reduction_module_b(inputs, filter_multiplier, i):
-    branch3x3 = conv_block(inputs, 6 * filter_multiplier, (1, 1))
-    branch3x3 = conv_block(branch3x3, 6 * filter_multiplier, (3, 3), strides=(2, 2))
-
-    branch3x3_2 = conv_block(inputs, 8 * filter_multiplier, (1, 1))
-    branch3x3_2 = conv_block(branch3x3_2, 10 * filter_multiplier, (1, 7))
-    branch3x3_2 = conv_block(branch3x3_2, 10 * filter_multiplier, (7, 1))
-    branch3x3_2 = conv_block(branch3x3_2, 10 * filter_multiplier, (3, 3), strides=(2, 2))
-
-    branch_pool = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding='same')(inputs)
-    out = tf.keras.layers.concatenate([branch3x3, branch3x3_2, branch_pool], axis=-1,
-                                      name='Inception_Reduction_Module_B_' + str(i))
+    out = tf.keras.layers.concatenate([inputs, x], axis=-1)
     return out

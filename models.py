@@ -1,7 +1,6 @@
 import tensorflow as tf
 
-from building_blocks import conv_block, inception_module_a, inception_module_b, inception_module_c, \
-    inception_reduction_module_a, inception_reduction_module_b
+from building_blocks import classifier, conv_block, inception_module, residual_module, dense_module
 
 
 def denovo_cnn_v2(input_shape):
@@ -17,80 +16,115 @@ def denovo_cnn_v2(input_shape):
     return tf.keras.Model(inputs, output, name='DeNovoCNN_v2')
 
 
-class DeNovoInceptionV4:
-    def __init__(self, input_shape, filter_multiplier, num_a_modules, num_b_modules, num_c_modules, pooling='avg',
-                 dropout_rate=False, auxiliary_outputs=False):
+class DeNovoInception:
+    def __init__(self, input_shape, filter_multiplier, num_modules, num_blocks,
+                 dropout_rate):
         self.input_shape = input_shape
         self.filter_multiplier = filter_multiplier
-        self.pooling = pooling
         self.dropout_rate = dropout_rate
-        self.auxiliary_outputs = auxiliary_outputs
-        self.num_a_modules = num_a_modules
-        self.num_b_modules = num_b_modules
-        self.num_c_modules = num_c_modules
-
-    def classifier(self, x):
-        if self.pooling == 'avg':
-            x = tf.keras.layers.GlobalAveragePooling2D()(x)
-        elif self.pooling == 'max':
-            x = tf.keras.layers.GlobalMaxPooling2D()(x)
-        x = tf.keras.layers.Flatten()(x)
-        x = tf.keras.layers.Dropout(self.dropout_rate)(x)
-        outputs = tf.keras.layers.Dense(1, activation='sigmoid')(x)
-        return outputs
+        self.num_blocks = num_blocks
+        self.num_modules = num_modules
 
     def model(self):
         inputs = tf.keras.Input(self.input_shape)
 
-        x = conv_block(inputs, self.filter_multiplier, 3, strides=2, padding='valid')
-        x = conv_block(x, self.filter_multiplier, 3, padding='valid')
-        x = conv_block(x, 2 * self.filter_multiplier, 3)
+        x = conv_block(inputs, self.filter_multiplier, (7, 7), strides=(2, 2))
+        x = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
 
-        branch1 = conv_block(x, 3 * self.filter_multiplier, 3, strides=2, padding='valid')
-        branch2 = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
-        x = tf.keras.layers.concatenate([branch1, branch2], axis=-1)
+        aux_outputs = []
 
-        branch1 = conv_block(x, 2 * self.filter_multiplier, 1)
-        branch1 = conv_block(branch1, 3 * self.filter_multiplier, 3, padding='valid')
-        branch2 = conv_block(x, 2 * self.filter_multiplier, 1)
-        branch2 = conv_block(branch2, 2 * self.filter_multiplier, 7)
-        branch2 = conv_block(branch2, 3 * self.filter_multiplier, 3, padding='valid')
-        x = tf.keras.layers.concatenate([branch1, branch2], axis=-1)
+        for i in range(self.num_blocks):
+            for j in range(self.num_modules):
+                x = inception_module(x, self.filter_multiplier)
+                if j == 0 and i != 0:
+                    aux_pool = tf.keras.layers.AveragePooling2D(pool_size=(5, 5), strides=(3, 3), padding='valid')(x)
+                    aux_conv = conv_block(aux_pool, 4 * self.filter_multiplier, (1, 1))
+                    aux_outputs.append(classifier(aux_conv, name='auxiliary', j=i))
 
-        branch1 = conv_block(x, 6 * self.filter_multiplier, 3, strides=(2, 2), padding='valid')
-        branch2 = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
-        x = tf.keras.layers.concatenate([branch1, branch2], axis=1)
+        final_output = classifier(x, dropout_rate=self.dropout_rate)
 
-        for i in range(self.num_a_modules):
-            x = inception_module_a(x, self.filter_multiplier, i)
+        return tf.keras.Model(inputs, outputs=[final_output, aux_outputs], name='DeNovoInception')
 
-        aux_output_0 = []
-        if self.auxiliary_outputs:
-            aux_pool = tf.keras.layers.AveragePooling2D(pool_size=(5, 5), strides=(3, 3), padding='valid')(x)
-            aux_conv = conv_block(aux_pool, 3 * self.filter_multiplier, 1)
-            aux_output_0 = self.classifier(aux_conv)
+    @staticmethod
+    def model_with_suggested_parameters(trial):
+        filter_multiplier = 2 ** trial.suggest_int('filter_multiplier_exp', 1, 6)
+        num_modules = trial.suggest_int('num_modules', 1, 5)
+        num_blocks = trial.suggest_int('num_blocks', 1, 3)
+        dropout_rate = trial.suggest_int('dropout_rate', 0, 500) / 1000
 
-        x = inception_reduction_module_a(x, self.filter_multiplier, 1)
+        return DeNovoInception(input_shape=(164, 160, 3), filter_multiplier=filter_multiplier, num_modules=num_modules,
+                               num_blocks=num_blocks, dropout_rate=dropout_rate).model()
 
-        for i in range(self.num_b_modules):
-            x = inception_module_b(x, self.filter_multiplier, i)
 
-        aux_output_1 = []
-        if self.auxiliary_outputs:
-            aux_pool = tf.keras.layers.AveragePooling2D(pool_size=(5, 5), strides=(3, 3), padding='valid')(x)
-            aux_conv = conv_block(aux_pool, 4 * self.filter_multiplier, 1)
-            aux_output_1 = self.classifier(aux_conv)
+class DeNovoResNet:
+    def __init__(self, input_shape, filter_multiplier, num_modules, num_blocks):
+        self.input_shape = input_shape
+        self.filter_multiplier = filter_multiplier
+        self.num_modules = num_modules
+        self.num_blocks = num_blocks
 
-        x = inception_reduction_module_b(x, self.filter_multiplier, 1)
+    def model(self):
+        inputs = tf.keras.Input(self.input_shape)
 
-        for i in range(self.num_c_modules):
-            x = inception_module_c(x, self.filter_multiplier, i)
+        x = conv_block(inputs, self.filter_multiplier, (7, 7), strides=(2, 2))
+        x = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
 
-        final_output = self.classifier(x)
+        for i in range(self.num_blocks):
+            for j in range(self.num_modules):
+                x = residual_module(x, filter_multiplier=self.filter_multiplier * (2 ** i),
+                                    increase_depth=i == 0,
+                                    decrease_size=j == 0 and i != 0)
 
-        model = tf.keras.Model(inputs, final_output, name='DeNovoInceptionV4')
-        if self.auxiliary_outputs:
-            model = tf.keras.Model(inputs, outputs=[final_output, aux_output_0, aux_output_1],
-                                   name='DeNovoInceptionV4')
+        final_output = classifier(x)
 
-        return model
+        return tf.keras.Model(inputs, outputs=[final_output], name='DeNovoResNet')
+
+    @staticmethod
+    def model_with_suggested_parameters(trial):
+        filter_multiplier = 2 ** trial.suggest_int('filter_multiplier_exp', 1, 6)
+        num_modules = trial.suggest_int('num_modules', 1, 5)
+        num_blocks = trial.suggest_int('num_blocks', 1, 3)
+
+        return DeNovoResNet(input_shape=(164, 160, 3), filter_multiplier=filter_multiplier, num_modules=num_modules,
+                            num_blocks=num_blocks).model()
+
+
+class DeNovoDenseNet:
+    def __init__(self, input_shape, filter_multiplier, num_modules, num_blocks):
+        self.input_shape = input_shape
+        self.filter_multiplier = filter_multiplier
+        self.num_modules = num_modules
+        self.num_blocks = num_blocks
+
+    def model(self):
+        inputs = tf.keras.Input(self.input_shape)
+
+        x = conv_block(inputs, self.filter_multiplier, (7, 7), strides=(2, 2))
+        x = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
+
+        for i in range(self.num_blocks):
+            for j in range(self.num_modules):
+                if j == 0 and i != 0:
+                    x = conv_block(x, self.filter_multiplier * (2 ** i) * 2, (1, 1),
+                                   strides=(1, 1), reverse=True)
+                    x = tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(2, 2))(x)
+                x = dense_module(x, filter_multiplier=self.filter_multiplier * (2 ** i))
+
+        final_output = classifier(x)
+
+        return tf.keras.Model(inputs, outputs=[final_output], name='DeNovoDenseNet')
+
+    @staticmethod
+    def model_with_suggested_parameters(trial):
+        filter_multiplier = 2 ** trial.suggest_int('filter_multiplier_exp', 1, 6)
+        num_modules = trial.suggest_int('num_modules', 1, 5)
+        num_blocks = trial.suggest_int('num_blocks', 1, 3)
+
+        return DeNovoDenseNet(input_shape=(164, 160, 3), filter_multiplier=filter_multiplier, num_modules=num_modules,
+                              num_blocks=num_blocks).model()
+
+
+class Models:
+    DeNovoInception = DeNovoInception
+    DeNovoResNet = DeNovoResNet
+    DeNovoDenseNet = DeNovoDenseNet
