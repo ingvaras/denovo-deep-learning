@@ -6,9 +6,9 @@ from lib.metrics import F1Score
 from lib.models import Model
 
 TEST = True
-EPOCHS = 10
+EPOCHS = 1
 
-model_to_evaluate = Model.DeNovoResNet
+model_to_evaluate = Model.DeNovoInception
 
 model_substitution = tf.keras.saving.load_model('models/' + model_to_evaluate.value.__name__ + '_substitution.keras')
 model_insertion = tf.keras.saving.load_model('models/' + model_to_evaluate.value.__name__ + '_insertion.keras')

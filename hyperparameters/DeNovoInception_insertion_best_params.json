@@ -1,5 +1,5 @@
 {
-  "filter_multiplier": 64,
-  "num_modules": 5,
-  "num_blocks": 3
+  "filter_multiplier": 32,
+  "num_modules": 4,
+  "num_blocks": 2
 }
