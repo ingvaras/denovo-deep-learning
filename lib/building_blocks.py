@@ -1,26 +1,34 @@
+import numpy as np
 import tensorflow as tf
+
+from lib.constants import POSITIVE_NEGATIVE_RATIO, L1
 
 
 def classifier(x, name='main', j=0):
-    x = tf.keras.layers.GlobalAveragePooling2D()(x)
-    x = tf.keras.layers.Flatten()(x)
-    outputs = tf.keras.layers.Dense(1, activation='sigmoid', name=name + "_classifier_" + str(j))(x)
+    x = tf.keras.layers.concatenate([tf.keras.layers.GlobalMaxPooling2D()(x),
+                                     tf.keras.layers.GlobalAveragePooling2D()(x)])
+    outputs = tf.keras.layers.Dense(1, activation='sigmoid', kernel_initializer=tf.keras.initializers.HeNormal(),
+                                    bias_initializer=tf.keras.initializers.Constant(np.log([POSITIVE_NEGATIVE_RATIO])),
+                                    kernel_regularizer=tf.keras.regularizers.l1(L1),
+                                    name=name + "_classifier_" + str(j))(x)
     return outputs
 
 
 def multi_layer_perceptron(x, hidden_layer_size):
-    return tf.keras.layers.Dense(hidden_layer_size, activation=tf.keras.activations.gelu)(x)
+    x = squeeze_excite_block(hidden_layer_size, x)
+    return tf.keras.layers.Dense(hidden_layer_size, activation=tf.keras.activations.gelu,
+                                 kernel_initializer=tf.keras.initializers.HeNormal())(x)
 
 
-def conv_block(x, model_width, kernel, strides=(1, 1), padding="same", activation='relu', reverse=False):
+def conv_block(x, filters, kernel, strides=(1, 1), padding="same", activation='relu', reverse=False):
     if not reverse:
-        x = tf.keras.layers.Conv2D(model_width, kernel, strides=strides, padding=padding,
-                                   kernel_initializer="he_normal")(x)
+        x = tf.keras.layers.Conv2D(filters, kernel, strides=strides, padding=padding,
+                                   kernel_initializer=tf.keras.initializers.HeNormal())(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.Activation(activation)(x)
     if reverse:
-        x = tf.keras.layers.Conv2D(model_width, kernel, strides=strides, padding=padding,
-                                   kernel_initializer="he_normal")(x)
+        x = tf.keras.layers.Conv2D(filters, kernel, strides=strides, padding=padding,
+                                   kernel_initializer=tf.keras.initializers.HeNormal())(x)
     return x
 
 
@@ -43,12 +51,12 @@ def inception_module(inputs, filter_multiplier):
 def residual_module(inputs, filter_multiplier, decrease_size=False, increase_depth=False):
     if decrease_size or increase_depth:
         shortcut = conv_block(inputs, 4 * filter_multiplier, (1, 1), strides=(2, 2) if decrease_size else (1, 1),
-                              padding='valid',
-                              activation='linear')
+                              padding='valid', activation='linear')
     else:
         shortcut = inputs
 
-    x = conv_block(inputs, filter_multiplier, (3, 3))
+    x = conv_block(inputs, filter_multiplier, (1, 1))
+    x = conv_block(x, filter_multiplier, (3, 3))
     x = conv_block(x, 4 * filter_multiplier, (1, 1), strides=(2, 2) if decrease_size else (1, 1), padding='valid',
                    activation='linear')
 
@@ -93,9 +101,19 @@ def patch_encoder(inputs, projection_dim):
 
 def vision_transformer_module(inputs, num_heads, projection_dim):
     attention_branch = tf.keras.layers.LayerNormalization(epsilon=1e-6)(inputs)
-    attention = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=projection_dim, dropout=0.1)(
+    attention = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=projection_dim,
+                                                   kernel_initializer=tf.keras.initializers.HeNormal())(
         attention_branch, attention_branch)
     attention_branch = tf.keras.layers.Add()([attention, attention_branch])
     mlp_branch = tf.keras.layers.LayerNormalization(epsilon=1e-6)(attention_branch)
     mlp_branch = multi_layer_perceptron(mlp_branch, projection_dim)
     return tf.keras.layers.Add()([mlp_branch, attention_branch])
+
+
+def squeeze_excite_block(filters, inputs):
+    se = tf.keras.layers.GlobalAveragePooling2D()(inputs)
+    se = tf.keras.layers.Reshape((1, filters))(se)
+    se = tf.keras.layers.Dense(filters // 32, activation='relu')(se)
+    se = tf.keras.layers.Dense(filters, activation='sigmoid')(se)
+    se = tf.keras.layers.multiply([inputs, se])
+    return se

@@ -1,44 +1,72 @@
 import gc
 import json
+import math
 
 import optuna
 import tensorflow as tf
 
-from lib.constants import MutationType, LEARNING_RATE
+from lib.augmentation import CustomDataGenerator
+from lib.constants import MutationType
 from lib.metrics import F1Score
 from lib.models import Model
+from lib.utils import get_steps_per_epoch
 
-EPOCHS = 30
+EPOCHS = 100
 N_OF_TRIALS = 20
 
-model_to_train = Model.DeNovoViT
-for mutation_type in MutationType:
-    train_data = tf.keras.preprocessing.image_dataset_from_directory('data/' + mutation_type.value + '/train',
-                                                                     image_size=(164, 160))
-    val_data = tf.keras.preprocessing.image_dataset_from_directory('data/' + mutation_type.value + '/val',
-                                                                   image_size=(164, 160))
+
+def step_decay(epoch):
+    initial_learning_rate = 0.0025
+    drop = 0.5
+    epochs_drop = 10.0
+    return initial_learning_rate * math.pow(drop, math.floor((1 + epoch) / epochs_drop))
+
+
+model_to_train = Model.DeNovoDenseNet
+for mutation_type in [MutationType.Deletion]:
+    train_datagen = CustomDataGenerator(samplewise_std_normalization=True, samplewise_center=True,
+                                        brightness_range=[0.3, 1.], horizontal_flip=True)
+    val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(samplewise_std_normalization=True,
+                                                                  samplewise_center=True)
+
+    train_generator = train_datagen.flow_from_directory(
+        'data/' + mutation_type.value + '/train',
+        target_size=(164, 160),
+        batch_size=32,
+        classes=['IV', 'DNM'],
+        class_mode='binary')
+
+    validation_generator = val_datagen.flow_from_directory(
+        'data/' + mutation_type.value + '/val',
+        target_size=(164, 160),
+        batch_size=32,
+        classes=['IV', 'DNM'],
+        class_mode='binary')
 
 
     def objective(trial):
         model = model_to_train.value.model_with_suggested_parameters(trial, mutation_type=mutation_type.value)
 
         model.compile(
-            optimizer=tf.keras.optimizers.legacy.Adam(LEARNING_RATE),
+            optimizer=tf.keras.optimizers.legacy.Adam(),
             loss=tf.keras.losses.BinaryCrossentropy(),
-            metrics=[F1Score()]
+            metrics=[F1Score(), tf.keras.metrics.BinaryAccuracy()]
         )
 
         model.fit(
-            train_data,
+            train_generator,
             batch_size=32,
-            validation_data=val_data,
+            steps_per_epoch=get_steps_per_epoch('data/' + mutation_type.value + '/train'),
+            validation_data=validation_generator,
+            validation_steps=get_steps_per_epoch('data/' + mutation_type.value + '/val'),
             epochs=EPOCHS,
             verbose=1,
             callbacks=[
-                tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True)]
+                tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=25, verbose=1, restore_best_weights=True),
+                tf.keras.callbacks.LearningRateScheduler(step_decay)]
         )
 
-        val_metrics = model.evaluate(val_data, verbose=0, return_dict=True)
+        val_metrics = model.evaluate(validation_generator, verbose=0, return_dict=True)
         if 'main_classifier_0_f1_score' in val_metrics.keys():
             return val_metrics['main_classifier_0_f1_score']
         return val_metrics['f1_score']

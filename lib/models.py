@@ -1,10 +1,12 @@
 import json
 from enum import Enum
 
+import numpy as np
 import tensorflow as tf
 
-from lib.building_blocks import classifier, conv_block, inception_module, residual_module, dense_module, \
-    patch_extractor, patch_encoder, vision_transformer_module, multi_layer_perceptron
+from lib.building_blocks import classifier, conv_block, inception_module, patch_extractor, \
+    patch_encoder, vision_transformer_module, multi_layer_perceptron, squeeze_excite_block, dense_module
+from lib.constants import L1, POSITIVE_NEGATIVE_RATIO
 
 
 class DeNovoInception:
@@ -69,14 +71,16 @@ class DeNovoResNet:
     def model(self):
         inputs = tf.keras.Input(self.input_shape)
 
-        x = conv_block(inputs, self.filter_multiplier, (7, 7), strides=(2, 2))
-        x = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
-
+        x = inputs
         for i in range(self.num_blocks):
+            shortcut = conv_block(x, self.filter_multiplier + 32 * i, (1, 1), strides=(2, 2), activation='linear')
             for j in range(self.num_modules):
-                x = residual_module(x, filter_multiplier=self.filter_multiplier * (2 ** i),
-                                    increase_depth=i == 0,
-                                    decrease_size=j == 0 and i != 0)
+                x = conv_block(x, self.filter_multiplier + 32 * i, (3, 3), activation='relu')
+            x = squeeze_excite_block(self.filter_multiplier + 32 * i, x)
+            x = tf.keras.layers.AveragePooling2D((2, 2))(x)
+            if shortcut.shape != x.shape:
+                x = tf.keras.layers.ZeroPadding2D(((0, 1), (0, 0)))(x)
+            x = tf.keras.layers.add([shortcut, x])
 
         final_output = classifier(x)
 
@@ -84,18 +88,17 @@ class DeNovoResNet:
 
     @staticmethod
     def model_with_suggested_parameters(trial, mutation_type):
-        filter_multiplier = trial.suggest_categorical('filter_multiplier', [2, 4, 8, 16, 32, 64])
-        num_modules = trial.suggest_int('num_modules', 1, 6)
-        num_blocks = trial.suggest_int('num_blocks', 1, 3)
+        filter_multiplier = trial.suggest_categorical('filter_multiplier', [32, 64, 96])
+        num_modules = trial.suggest_int('num_modules', 1, 4)
+        num_blocks = trial.suggest_int('num_blocks', 1, 4)
 
         return DeNovoResNet(input_shape=(164, 160, 3), filter_multiplier=filter_multiplier, num_modules=num_modules,
                             num_blocks=num_blocks, mutation_type=mutation_type).model()
 
     @staticmethod
     def model_with_params_from_json(file_path, mutation_type):
-
-        model = DeNovoResNet(input_shape=(164, 160, 3), filter_multiplier=None, num_modules=None,
-                             num_blocks=None, mutation_type=mutation_type)
+        model = DeNovoResNet(input_shape=(164, 160, 3), filter_multiplier=None, num_modules=None, num_blocks=None,
+                             mutation_type=mutation_type)
 
         with open(file_path, 'r') as f:
             data = json.load(f)
@@ -115,16 +118,15 @@ class DeNovoDenseNet:
     def model(self):
         inputs = tf.keras.Input(self.input_shape)
 
-        x = conv_block(inputs, self.filter_multiplier, (7, 7), strides=(2, 2))
-        x = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
+        x = inputs
 
         for i in range(self.num_blocks):
             for j in range(self.num_modules):
-                if j == 0 and i != 0:
-                    x = conv_block(x, self.filter_multiplier * (2 ** i) * 2, (1, 1),
-                                   strides=(1, 1), reverse=True)
-                    x = tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(2, 2))(x)
-                x = dense_module(x, filter_multiplier=self.filter_multiplier * (2 ** i))
+                x = dense_module(x, filter_multiplier=self.filter_multiplier + 32 * i)
+            x = conv_block(x, self.filter_multiplier + 32 * (i + 1), (1, 1),
+                           strides=(1, 1), reverse=True)
+            x = squeeze_excite_block(self.filter_multiplier + 32 * (i + 1), x)
+            x = tf.keras.layers.AveragePooling2D((2, 2))(x)
 
         final_output = classifier(x)
 
@@ -132,9 +134,9 @@ class DeNovoDenseNet:
 
     @staticmethod
     def model_with_suggested_parameters(trial, mutation_type):
-        filter_multiplier = trial.suggest_categorical('filter_multiplier', [2, 4, 8, 16, 32, 64])
-        num_modules = trial.suggest_int('num_modules', 1, 6)
-        num_blocks = trial.suggest_int('num_blocks', 1, 3)
+        filter_multiplier = trial.suggest_categorical('filter_multiplier', [32, 64, 96])
+        num_modules = trial.suggest_int('num_modules', 1, 4)
+        num_blocks = trial.suggest_int('num_blocks', 1, 4)
 
         return DeNovoDenseNet(input_shape=(164, 160, 3), filter_multiplier=filter_multiplier, num_modules=num_modules,
                               num_blocks=num_blocks, mutation_type=mutation_type).model()
@@ -175,16 +177,22 @@ class DeNovoViT:
         x = tf.keras.layers.Flatten()(x)
         x = multi_layer_perceptron(x, self.projection_dim)
 
-        final_output = tf.keras.layers.Dense(1, activation='sigmoid', name="main_classifier_0")(x)
+        final_output = tf.keras.layers.Dense(1, activation='sigmoid',
+                                             kernel_initializer=tf.keras.initializers.HeNormal(),
+                                             name="main_classifier_0",
+                                             bias_initializer=tf.keras.initializers.Constant(
+                                                 np.log([POSITIVE_NEGATIVE_RATIO])),
+                                             kernel_regularizer=tf.keras.regularizers.l1(L1))(x)
 
         return tf.keras.Model(inputs, outputs=[final_output], name='DeNovoViT_' + self.mutation_type)
 
     @staticmethod
     def model_with_suggested_parameters(trial, mutation_type):
-        projection_dim = 2 ** trial.suggest_int('projection_dim_exp', 2, 6)
+        projection_dim = 2 ** trial.suggest_int('projection_dim_exp', 4, 7)
         num_heads = 2 ** trial.suggest_int('num_heads_exp', 0, 3)
-        num_blocks = trial.suggest_int('num_blocks', 1, 3)
-        patch_size = trial.suggest_categorical('patch_size', [16, 20])
+        num_blocks = trial.suggest_int('num_blocks', 1, 8)
+        patch_size = trial.suggest_categorical('patch_size', [12, 16, 20])
+        l1 = 2 ** trial.suggest_int('l1_exp', -19, -13)
 
         return DeNovoViT(input_shape=(164, 160, 3), projection_dim=projection_dim, num_heads=num_heads,
                          num_blocks=num_blocks, patch_size=patch_size, mutation_type=mutation_type).model()

@@ -2,6 +2,7 @@ import tensorflow as tf
 
 
 # tf.keras.metrics.F1Score does not support binary classification, so custom implementation was used
+@tf.keras.saving.register_keras_serializable(package="lib", name="F1Score")
 class F1Score(tf.keras.metrics.Metric):
     def __init__(self, name='f1_score', **kwargs):
         super(F1Score, self).__init__(name=name, **kwargs)
