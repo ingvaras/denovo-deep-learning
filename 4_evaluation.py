@@ -1,10 +1,13 @@
+import time
+
+import numpy as np
 import tensorflow as tf
 
 from lib.constants import MutationType
 from lib.metrics import F1Score
 from lib.models import Model
 
-model_to_evaluate = Model.DeNovoDenseNet
+model_to_evaluate = Model.DeNovoInception
 
 for mutation_type in MutationType:
     test_datagen = tf.keras.preprocessing.image.ImageDataGenerator(samplewise_std_normalization=True,
@@ -36,3 +39,13 @@ for mutation_type in MutationType:
     )
     print(mutation_type.value)
     model.evaluate(test_generator)
+
+    input_data = np.random.randn(1280, 164, 160, 3).astype(np.float32)
+    # warmup
+    model.predict(input_data, verbose=0)
+
+    start_time = time.time()
+    model.predict(input_data, verbose=0)
+    end_time = time.time()
+
+    print("Inference time:", (end_time - start_time) / 1280 / 1000, "ms")

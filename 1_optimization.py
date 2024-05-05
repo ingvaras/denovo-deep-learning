@@ -6,24 +6,25 @@ import optuna
 import tensorflow as tf
 
 from lib.augmentation import CustomDataGenerator
-from lib.constants import MutationType
+from lib.constants import MutationType, LEARNING_RATE
 from lib.metrics import F1Score
 from lib.models import Model
 from lib.utils import get_steps_per_epoch
 
-EPOCHS = 100
+EPOCHS = 150
 N_OF_TRIALS = 20
+
+model_to_train = Model.DeNovoViT
 
 
 def step_decay(epoch):
-    initial_learning_rate = 0.0025
+    initial_learning_rate = LEARNING_RATE
     drop = 0.5
-    epochs_drop = 10.0
+    epochs_drop = 10.0 if mutation_type != MutationType.Substitution else 6.0
     return initial_learning_rate * math.pow(drop, math.floor((1 + epoch) / epochs_drop))
 
 
-model_to_train = Model.DeNovoDenseNet
-for mutation_type in [MutationType.Deletion]:
+for mutation_type in [MutationType.Insertion]:
     train_datagen = CustomDataGenerator(samplewise_std_normalization=True, samplewise_center=True,
                                         brightness_range=[0.3, 1.], horizontal_flip=True)
     val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(samplewise_std_normalization=True,
@@ -62,7 +63,9 @@ for mutation_type in [MutationType.Deletion]:
             epochs=EPOCHS,
             verbose=1,
             callbacks=[
-                tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=25, verbose=1, restore_best_weights=True),
+                tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+                                                 patience=30 if mutation_type != MutationType.Substitution else 15,
+                                                 verbose=1, restore_best_weights=True),
                 tf.keras.callbacks.LearningRateScheduler(step_decay)]
         )
 

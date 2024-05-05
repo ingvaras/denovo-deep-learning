@@ -20,19 +20,18 @@ class DeNovoInception:
     def model(self):
         inputs = tf.keras.Input(self.input_shape)
 
-        x = conv_block(inputs, self.filter_multiplier, (7, 7), strides=(2, 2))
-        x = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
-
         aux_outputs = []
+        x = inputs
 
         for i in range(self.num_blocks):
             for j in range(self.num_modules):
-                if j == 0 and i != 0:
-                    aux_pool = tf.keras.layers.AveragePooling2D(pool_size=(5, 5), strides=(3, 3), padding='valid')(x)
-                    aux_conv = conv_block(aux_pool, 4 * self.filter_multiplier, (1, 1))
-                    aux_outputs.append(classifier(aux_conv, name='auxiliary', j=i))
-                    x = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
-                x = inception_module(x, self.filter_multiplier * (2 ** i))
+                x = inception_module(x, self.filter_multiplier + 32 * i)
+                x = squeeze_excite_block(x, x.shape[3])
+            if i != self.num_blocks - 1:
+                aux_pool = tf.keras.layers.AveragePooling2D(pool_size=(5, 5), strides=(3, 3), padding='valid')(x)
+                aux_conv = conv_block(aux_pool, self.filter_multiplier // 2, (1, 1))
+                aux_outputs.append(classifier(aux_conv, name='auxiliary', j=i))
+                x = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(x)
 
         final_output = classifier(x)
 
@@ -40,9 +39,9 @@ class DeNovoInception:
 
     @staticmethod
     def model_with_suggested_parameters(trial, mutation_type):
-        filter_multiplier = trial.suggest_categorical('filter_multiplier', [2, 4, 8, 16, 32, 64])
-        num_modules = trial.suggest_int('num_modules', 1, 6)
-        num_blocks = trial.suggest_int('num_blocks', 1, 3)
+        filter_multiplier = trial.suggest_categorical('filter_multiplier', [16, 32])
+        num_modules = trial.suggest_int('num_modules', 2, 3)
+        num_blocks = trial.suggest_int('num_blocks', 2, 4)
 
         return DeNovoInception(input_shape=(164, 160, 3), filter_multiplier=filter_multiplier, num_modules=num_modules,
                                num_blocks=num_blocks, mutation_type=mutation_type).model()
@@ -76,7 +75,7 @@ class DeNovoResNet:
             shortcut = conv_block(x, self.filter_multiplier + 32 * i, (1, 1), strides=(2, 2), activation='linear')
             for j in range(self.num_modules):
                 x = conv_block(x, self.filter_multiplier + 32 * i, (3, 3), activation='relu')
-            x = squeeze_excite_block(self.filter_multiplier + 32 * i, x)
+            x = squeeze_excite_block(x, self.filter_multiplier + 32 * i)
             x = tf.keras.layers.AveragePooling2D((2, 2))(x)
             if shortcut.shape != x.shape:
                 x = tf.keras.layers.ZeroPadding2D(((0, 1), (0, 0)))(x)
@@ -125,7 +124,7 @@ class DeNovoDenseNet:
                 x = dense_module(x, filter_multiplier=self.filter_multiplier + 32 * i)
             x = conv_block(x, self.filter_multiplier + 32 * (i + 1), (1, 1),
                            strides=(1, 1), reverse=True)
-            x = squeeze_excite_block(self.filter_multiplier + 32 * (i + 1), x)
+            x = squeeze_excite_block(x, self.filter_multiplier + 32 * (i + 1))
             x = tf.keras.layers.AveragePooling2D((2, 2))(x)
 
         final_output = classifier(x)
@@ -188,11 +187,10 @@ class DeNovoViT:
 
     @staticmethod
     def model_with_suggested_parameters(trial, mutation_type):
-        projection_dim = 2 ** trial.suggest_int('projection_dim_exp', 4, 7)
+        projection_dim = trial.suggest_categorical('projection_dim', [32, 64, 96, 128])
         num_heads = 2 ** trial.suggest_int('num_heads_exp', 0, 3)
-        num_blocks = trial.suggest_int('num_blocks', 1, 8)
-        patch_size = trial.suggest_categorical('patch_size', [12, 16, 20])
-        l1 = 2 ** trial.suggest_int('l1_exp', -19, -13)
+        num_blocks = trial.suggest_int('num_blocks', 1, 10)
+        patch_size = trial.suggest_categorical('patch_size', [16, 20])
 
         return DeNovoViT(input_shape=(164, 160, 3), projection_dim=projection_dim, num_heads=num_heads,
                          num_blocks=num_blocks, patch_size=patch_size, mutation_type=mutation_type).model()

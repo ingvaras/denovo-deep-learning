@@ -26,23 +26,32 @@ rm training_dataset.tar.gz
 
 ## Results
 
-| Model           | Recall | Precision | Accuracy | F1Score |
-|-----------------|--------|-----------|----------|---------|
-| DeNovoEnsemble  |        |           |          |         |
-| DeNovoResNet    | 0.9789 | 0.9623    | 0.9907   | 0.9705  |
-| DeNovoDenseNet  | 0.9731 | 0.9651    | 0.9903   | 0.9691	 |
-| DeNovoViT       |        |           |          |         |
-| DeNovoInception |        |           |          |         |
-| DeNovoCNN [1]   | 0.9674 | 0.9655    | 0.9895   | 0.9665  |
+| Model           | Recall | Precision | Accuracy | F1 score |
+|-----------------|--------|-----------|----------|----------|
+| DeNovoEnsemble  |        |           |          |          | 
+| DeNovoInception | 0.9789 | 0.9727    | 0.9924   | 0.9758   |          
+| DeNovoResNet    | 0.9789 | 0.9623    | 0.9907   | 0.9705   |
+| DeNovoDenseNet  | 0.9731 | 0.9651    | 0.9903   | 0.9691	  |            
+| DeNovoViT       |        |           |          |          |
+| DeNovoCNN [1]   | 0.9674 | 0.9655    | 0.9895   | 0.9665   |
 
 | Model           | True positives | False positives | True negatives | False negatives |
 |-----------------|----------------|-----------------|----------------|-----------------|
 | DeNovoEnsemble  |                |                 |                |                 |
-| DeNovoResNet    | 1531           | 60              | 8355           | 33              |
+| DeNovoInception | 1531           | 43              | 8367           | 33              |
+| DeNovoResNet    | 1531           | 60              | 8350           | 33              |
 | DeNovoDenseNet  | 1522           | 55              | 8355           | 42              |
 | DeNovoViT       |                |                 |                |                 |
-| DeNovoInception |                |                 |                |                 |
-| DeNovoCNN [1]   | 1513           | 54              | 8350           | 51              |
+| DeNovoCNN [1]   | 1513           | 54              | 8356           | 51              |
+
+| Model           | Insertions inference time | Deletions inference time | Substitutions inference time |
+|-----------------|---------------------------|--------------------------|------------------------------|
+| DeNovoEnsemble  |                           |                          |                              | 
+| DeNovoInception |                           |                          |                              |               
+| DeNovoResNet    |                           |                          |                              | 
+| DeNovoDenseNet  |                           |                          |                              |                 
+| DeNovoViT       |                           |                          |                              | 
+| DeNovoCNN       |                           |                          |                              |
 
 ## References
 

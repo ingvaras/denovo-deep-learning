@@ -15,7 +15,6 @@ def classifier(x, name='main', j=0):
 
 
 def multi_layer_perceptron(x, hidden_layer_size):
-    x = squeeze_excite_block(hidden_layer_size, x)
     return tf.keras.layers.Dense(hidden_layer_size, activation=tf.keras.activations.gelu,
                                  kernel_initializer=tf.keras.initializers.HeNormal())(x)
 
@@ -33,16 +32,16 @@ def conv_block(x, filters, kernel, strides=(1, 1), padding="same", activation='r
 
 
 def inception_module(inputs, filter_multiplier):
-    branch1x1 = conv_block(inputs, 4 * filter_multiplier, (1, 1))
+    branch1x1 = conv_block(inputs, filter_multiplier // 2, (1, 1))
 
-    branch3x3 = conv_block(inputs, 4 * filter_multiplier, (1, 1))
-    branch3x3 = conv_block(branch3x3, 8 * filter_multiplier, (3, 3))
+    branch3x3 = conv_block(inputs, filter_multiplier // 2, (1, 1))
+    branch3x3 = conv_block(branch3x3, filter_multiplier, (3, 3))
 
-    branch5x5 = conv_block(inputs, 1 * filter_multiplier, (1, 1))
-    branch5x5 = conv_block(branch5x5, 2 * filter_multiplier, (5, 5))
+    branch5x5 = conv_block(inputs, filter_multiplier // 8, (1, 1))
+    branch5x5 = conv_block(branch5x5, filter_multiplier // 4, (5, 5))
 
     branch_pool = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=(1, 1), padding='same')(inputs)
-    branch_pool = conv_block(branch_pool, 2 * filter_multiplier, (1, 1))
+    branch_pool = conv_block(branch_pool, filter_multiplier // 4, (1, 1))
 
     out = tf.keras.layers.concatenate([branch1x1, branch3x3, branch5x5, branch_pool], axis=-1)
     return out
@@ -110,7 +109,7 @@ def vision_transformer_module(inputs, num_heads, projection_dim):
     return tf.keras.layers.Add()([mlp_branch, attention_branch])
 
 
-def squeeze_excite_block(filters, inputs):
+def squeeze_excite_block(inputs, filters):
     se = tf.keras.layers.GlobalAveragePooling2D()(inputs)
     se = tf.keras.layers.Reshape((1, filters))(se)
     se = tf.keras.layers.Dense(filters // 32, activation='relu')(se)
