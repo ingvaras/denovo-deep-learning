@@ -15,6 +15,8 @@ def classifier(x, name='main', j=0):
 
 
 def multi_layer_perceptron(x, hidden_layer_size):
+    x = tf.keras.layers.Dense(2 * hidden_layer_size, activation=tf.keras.activations.gelu,
+                              kernel_initializer=tf.keras.initializers.HeNormal())(x)
     return tf.keras.layers.Dense(hidden_layer_size, activation=tf.keras.activations.gelu,
                                  kernel_initializer=tf.keras.initializers.HeNormal())(x)
 
@@ -101,7 +103,7 @@ def patch_encoder(inputs, projection_dim):
 def vision_transformer_module(inputs, num_heads, projection_dim):
     attention_branch = tf.keras.layers.LayerNormalization(epsilon=1e-6)(inputs)
     attention = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=projection_dim,
-                                                   kernel_initializer=tf.keras.initializers.HeNormal())(
+                                                   kernel_initializer=tf.keras.initializers.HeNormal(), dropout=0.1)(
         attention_branch, attention_branch)
     attention_branch = tf.keras.layers.Add()([attention, attention_branch])
     mlp_branch = tf.keras.layers.LayerNormalization(epsilon=1e-6)(attention_branch)

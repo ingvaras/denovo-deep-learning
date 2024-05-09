@@ -48,4 +48,4 @@ for mutation_type in MutationType:
     model.predict(input_data, verbose=0)
     end_time = time.time()
 
-    print("Inference time:", (end_time - start_time) / 1280 / 1000, "ms")
+    print("Inference time:", (end_time - start_time) / 1280 * 1000, "ms")

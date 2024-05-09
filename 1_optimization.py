@@ -14,7 +14,7 @@ from lib.utils import get_steps_per_epoch
 EPOCHS = 150
 N_OF_TRIALS = 20
 
-model_to_train = Model.DeNovoViT
+model_to_train = Model.DeNovoInception
 
 
 def step_decay(epoch):
@@ -24,7 +24,7 @@ def step_decay(epoch):
     return initial_learning_rate * math.pow(drop, math.floor((1 + epoch) / epochs_drop))
 
 
-for mutation_type in [MutationType.Insertion]:
+for mutation_type in MutationType:
     train_datagen = CustomDataGenerator(samplewise_std_normalization=True, samplewise_center=True,
                                         brightness_range=[0.3, 1.], horizontal_flip=True)
     val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(samplewise_std_normalization=True,

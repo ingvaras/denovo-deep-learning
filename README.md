@@ -8,8 +8,8 @@ used for mutations detection in sequencing data.
 
 ## Setup
 
-The data used for training and evaluation of <i>de novo</i> deep learning models can be found in
-this <a href="https://github.com/Genome-Bioinformatics-RadboudUMC/DeNovoCNN_training_dataset">DeNovoCNN GitHub
+The data used for training and evaluation of <i>de novo</i> deep learning models can be found
+in <a href="https://github.com/Genome-Bioinformatics-RadboudUMC/DeNovoCNN_training_dataset">DeNovoCNN GitHub
 repository</a> [2].
 
 To download the data and extract it run the following commands in the project directory:
@@ -32,7 +32,7 @@ rm training_dataset.tar.gz
 | DeNovoInception | 0.9789 | 0.9727    | 0.9924   | 0.9758   |          
 | DeNovoResNet    | 0.9789 | 0.9623    | 0.9907   | 0.9705   |
 | DeNovoDenseNet  | 0.9731 | 0.9651    | 0.9903   | 0.9691	  |            
-| DeNovoViT       |        |           |          |          |
+| DeNovoViT       | 0.9751 | 0.9385    | 0.9861   | 0.9564   |
 | DeNovoCNN [1]   | 0.9674 | 0.9655    | 0.9895   | 0.9665   |
 
 | Model           | True positives | False positives | True negatives | False negatives |
@@ -41,17 +41,17 @@ rm training_dataset.tar.gz
 | DeNovoInception | 1531           | 43              | 8367           | 33              |
 | DeNovoResNet    | 1531           | 60              | 8350           | 33              |
 | DeNovoDenseNet  | 1522           | 55              | 8355           | 42              |
-| DeNovoViT       |                |                 |                |                 |
+| DeNovoViT       | 1525           | 100             | 8310           | 39              |
 | DeNovoCNN [1]   | 1513           | 54              | 8356           | 51              |
 
-| Model           | Insertions inference time | Deletions inference time | Substitutions inference time |
-|-----------------|---------------------------|--------------------------|------------------------------|
-| DeNovoEnsemble  |                           |                          |                              | 
-| DeNovoInception |                           |                          |                              |               
-| DeNovoResNet    |                           |                          |                              | 
-| DeNovoDenseNet  |                           |                          |                              |                 
-| DeNovoViT       |                           |                          |                              | 
-| DeNovoCNN       |                           |                          |                              |
+| Model           | Insertions inference time [ms] | Deletions inference time [ms] | Substitutions inference time [ms] |
+|-----------------|--------------------------------|-------------------------------|-----------------------------------|
+| DeNovoEnsemble  |                                |                               |                                   | 
+| DeNovoInception | 3.2                            | 2.7                           | 8.8                               |               
+| DeNovoResNet    | 3.0                            | 5.0                           | 5.2                               | 
+| DeNovoDenseNet  | 4.6                            | 9.7                           | 15.4                              |                 
+| DeNovoViT       | 2.1                            | 4.5                           | 7.6                               | 
+| DeNovoCNN       | 9.3                            | 9.3                           | 9.3                               |
 
 ## References
 

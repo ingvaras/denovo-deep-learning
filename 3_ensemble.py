@@ -1,21 +1,22 @@
 import pickle
 
+import numpy as np
 import tensorflow as tf
 
 from lib.augmentation import CustomDataGenerator
-from lib.constants import MutationType
+from lib.constants import MutationType, POSITIVE_NEGATIVE_RATIO
 from lib.metrics import F1Score
 from lib.models import Model
 from lib.utils import get_steps_per_epoch
 
-TEST = True
+TEST = False
 EPOCHS = 20
 
 input_layer = tf.keras.layers.Input(shape=(164, 160, 3))
 
 for mutation_type in [MutationType.Insertion]:
     model_outputs = []
-    for model in [Model.DeNovoDenseNet, Model.DeNovoResNet]:
+    for model in Model:
         loaded_model = tf.keras.saving.load_model(
             'models/' + model.value.__name__ + '_' + mutation_type.value + '.keras',
             custom_objects={"F1Score": F1Score})
@@ -24,14 +25,17 @@ for mutation_type in [MutationType.Insertion]:
             loaded_model(input_layer) if model != Model.DeNovoInception else loaded_model(input_layer)[0])
 
     concatenated_outputs = tf.keras.layers.Concatenate(axis=-1)(model_outputs)
-    combined_classifier = tf.keras.layers.Dense(1, activation='sigmoid')
+    combined_classifier = tf.keras.layers.Dense(1, activation='sigmoid',
+                                                kernel_initializer=tf.keras.initializers.HeNormal(),
+                                                bias_initializer=tf.keras.initializers.Constant(
+                                                    np.log([POSITIVE_NEGATIVE_RATIO])))
     output = combined_classifier(concatenated_outputs)
 
     ensemble_model = tf.keras.models.Model(inputs=input_layer, outputs=output)
 
     if not TEST:
-        with open('models/DeNovoEnsemble_' + mutation_type.value + '_head.pkl', 'rb') as f:
-            combined_classifier.set_weights(pickle.load(f))
+        # with open('models/DeNovoEnsemble_' + mutation_type.value + '_head.pkl', 'rb') as f:
+        #    combined_classifier.set_weights(pickle.load(f))
 
         ensemble_model.compile(
             optimizer=tf.keras.optimizers.legacy.Adam(),

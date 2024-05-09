@@ -12,7 +12,7 @@ from lib.utils import get_steps_per_epoch
 EPOCHS = 200
 model_to_train = Model.DeNovoInception
 
-for mutation_type in [MutationType.Deletion, MutationType.Insertion]:
+for mutation_type in MutationType:
     def step_decay(epoch):
         initial_learning_rate = LEARNING_RATE
         drop = 0.5

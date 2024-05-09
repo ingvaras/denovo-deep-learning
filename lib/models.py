@@ -39,9 +39,9 @@ class DeNovoInception:
 
     @staticmethod
     def model_with_suggested_parameters(trial, mutation_type):
-        filter_multiplier = trial.suggest_categorical('filter_multiplier', [16, 32])
-        num_modules = trial.suggest_int('num_modules', 2, 3)
-        num_blocks = trial.suggest_int('num_blocks', 2, 4)
+        filter_multiplier = trial.suggest_categorical('filter_multiplier', [32, 64, 96])
+        num_modules = trial.suggest_int('num_modules', 1, 4)
+        num_blocks = trial.suggest_int('num_blocks', 1, 4)
 
         return DeNovoInception(input_shape=(164, 160, 3), filter_multiplier=filter_multiplier, num_modules=num_modules,
                                num_blocks=num_blocks, mutation_type=mutation_type).model()
@@ -166,7 +166,12 @@ class DeNovoViT:
     def model(self):
         inputs = tf.keras.Input(self.input_shape)
 
-        patches = patch_extractor(inputs, self.patch_size)
+        x = conv_block(inputs, self.projection_dim, (3, 3), activation='relu')
+        x = conv_block(x, self.projection_dim, (3, 3), activation='relu')
+        x = conv_block(x, self.projection_dim, (3, 3), activation='relu')
+        x = squeeze_excite_block(x, self.projection_dim)
+
+        patches = patch_extractor(x, self.patch_size)
         x = patch_encoder(patches, self.projection_dim)
 
         for i in range(self.num_blocks):
@@ -187,10 +192,10 @@ class DeNovoViT:
 
     @staticmethod
     def model_with_suggested_parameters(trial, mutation_type):
-        projection_dim = trial.suggest_categorical('projection_dim', [32, 64, 96, 128])
+        projection_dim = trial.suggest_categorical('projection_dim', [32, 64, 96])
         num_heads = 2 ** trial.suggest_int('num_heads_exp', 0, 3)
-        num_blocks = trial.suggest_int('num_blocks', 1, 10)
-        patch_size = trial.suggest_categorical('patch_size', [16, 20])
+        num_blocks = trial.suggest_int('num_blocks', 1, 4)
+        patch_size = trial.suggest_categorical('patch_size', [8, 16, 20])
 
         return DeNovoViT(input_shape=(164, 160, 3), projection_dim=projection_dim, num_heads=num_heads,
                          num_blocks=num_blocks, patch_size=patch_size, mutation_type=mutation_type).model()

@@ -1,6 +1,6 @@
 {
-  "num_blocks": 2,
+  "num_blocks": 1,
   "patch_size": 16,
-  "projection_dim": 8,
+  "projection_dim": 32,
   "num_heads": 4
 }
