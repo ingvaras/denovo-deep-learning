@@ -26,18 +26,18 @@ rm training_dataset.tar.gz
 
 ## Results
 
-| Model           | Recall | Precision | Accuracy | F1 score |
-|-----------------|--------|-----------|----------|----------|
-| DeNovoEnsemble  |        |           |          |          | 
-| DeNovoInception | 0.9789 | 0.9727    | 0.9924   | 0.9758   |          
-| DeNovoResNet    | 0.9789 | 0.9623    | 0.9907   | 0.9705   |
-| DeNovoDenseNet  | 0.9731 | 0.9651    | 0.9903   | 0.9691	  |            
-| DeNovoViT       | 0.9751 | 0.9385    | 0.9861   | 0.9564   |
-| DeNovoCNN [1]   | 0.9674 | 0.9655    | 0.9895   | 0.9665   |
+| Model           | Recall  | Precision | Accuracy | F1 score |
+|-----------------|---------|-----------|----------|----------|
+| DeNovoEnsemble  | 0.9795	 | 0.9739    | 0.9927   | 0.9767   | 
+| DeNovoInception | 0.9789  | 0.9727    | 0.9924   | 0.9758   |          
+| DeNovoResNet    | 0.9789  | 0.9623    | 0.9907   | 0.9705   |
+| DeNovoDenseNet  | 0.9731  | 0.9651    | 0.9903   | 0.9691   |            
+| DeNovoViT       | 0.9751  | 0.9385    | 0.9861   | 0.9564   |
+| DeNovoCNN [1]   | 0.9674  | 0.9655    | 0.9895   | 0.9665   |
 
 | Model           | True positives | False positives | True negatives | False negatives |
 |-----------------|----------------|-----------------|----------------|-----------------|
-| DeNovoEnsemble  |                |                 |                |                 |
+| DeNovoEnsemble  | 1532           | 41              | 8369           | 32              |
 | DeNovoInception | 1531           | 43              | 8367           | 33              |
 | DeNovoResNet    | 1531           | 60              | 8350           | 33              |
 | DeNovoDenseNet  | 1522           | 55              | 8355           | 42              |
@@ -46,7 +46,7 @@ rm training_dataset.tar.gz
 
 | Model           | Insertions inference time [ms] | Deletions inference time [ms] | Substitutions inference time [ms] |
 |-----------------|--------------------------------|-------------------------------|-----------------------------------|
-| DeNovoEnsemble  |                                |                               |                                   | 
+| DeNovoEnsemble  | 12.7                           | 18.3                          | 33.5                              | 
 | DeNovoInception | 3.2                            | 2.7                           | 8.8                               |               
 | DeNovoResNet    | 3.0                            | 5.0                           | 5.2                               | 
 | DeNovoDenseNet  | 4.6                            | 9.7                           | 15.4                              |                 

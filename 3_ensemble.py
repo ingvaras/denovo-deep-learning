@@ -1,20 +1,20 @@
 import pickle
+import time
 
 import numpy as np
 import tensorflow as tf
 
-from lib.augmentation import CustomDataGenerator
-from lib.constants import MutationType, POSITIVE_NEGATIVE_RATIO
+from lib.constants import MutationType, POSITIVE_NEGATIVE_RATIO, L1
 from lib.metrics import F1Score
 from lib.models import Model
 from lib.utils import get_steps_per_epoch
 
-TEST = False
-EPOCHS = 20
+TEST = True
+EPOCHS = 50
 
 input_layer = tf.keras.layers.Input(shape=(164, 160, 3))
 
-for mutation_type in [MutationType.Insertion]:
+for mutation_type in MutationType:
     model_outputs = []
     for model in Model:
         loaded_model = tf.keras.saving.load_model(
@@ -28,23 +28,21 @@ for mutation_type in [MutationType.Insertion]:
     combined_classifier = tf.keras.layers.Dense(1, activation='sigmoid',
                                                 kernel_initializer=tf.keras.initializers.HeNormal(),
                                                 bias_initializer=tf.keras.initializers.Constant(
-                                                    np.log([POSITIVE_NEGATIVE_RATIO])))
+                                                    np.log([POSITIVE_NEGATIVE_RATIO])),
+                                                kernel_regularizer=tf.keras.regularizers.l1(L1))
     output = combined_classifier(concatenated_outputs)
 
     ensemble_model = tf.keras.models.Model(inputs=input_layer, outputs=output)
 
     if not TEST:
-        # with open('models/DeNovoEnsemble_' + mutation_type.value + '_head.pkl', 'rb') as f:
-        #    combined_classifier.set_weights(pickle.load(f))
-
         ensemble_model.compile(
             optimizer=tf.keras.optimizers.legacy.Adam(),
             loss=tf.keras.losses.BinaryCrossentropy(),
             metrics=[F1Score(), tf.keras.metrics.BinaryAccuracy()]
         )
 
-        train_datagen = CustomDataGenerator(samplewise_std_normalization=True, samplewise_center=True,
-                                            brightness_range=[0.3, 1.], horizontal_flip=True)
+        train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(samplewise_std_normalization=True,
+                                                                        samplewise_center=True)
         val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(samplewise_std_normalization=True,
                                                                       samplewise_center=True)
 
@@ -100,3 +98,13 @@ for mutation_type in [MutationType.Insertion]:
             class_mode='binary')
 
         ensemble_model.evaluate(test_generator, return_dict=True)
+
+        input_data = np.random.randn(1280, 164, 160, 3).astype(np.float32)
+        # warmup
+        ensemble_model.predict(input_data, verbose=0)
+
+        start_time = time.time()
+        ensemble_model.predict(input_data, verbose=0)
+        end_time = time.time()
+
+        print("Inference time:", (end_time - start_time) / 1280 * 1000, "ms")
