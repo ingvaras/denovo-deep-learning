@@ -53,6 +53,24 @@ rm training_dataset.tar.gz
 | DeNovoViT       | 2.1                            | 4.5                           | 7.6                               | 
 | DeNovoCNN       | 9.3                            | 9.3                           | 9.3                               |
 
+## Models
+
+### DeNovoViT
+
+![alt text](/models/DeNovoViT.png)
+
+### DeNovoDenseNet
+
+![alt text](/models/DeNovoDenseNet.png)
+
+### DeNovoResNet
+
+![alt text](/models/DeNovoResNet.png)
+
+### DeNovoInception
+
+![alt text](/models/DeNovoInception.png)
+
 ## References
 
 [1] Khazeeva, G., Sablauskas, K., van der Sanden, B., Steyaert, W., Kwint, M., Rots, D., Hinne, M., van Gerven, M.,
